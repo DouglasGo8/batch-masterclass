@@ -1,0 +1,29 @@
+#
+spring:
+  batch:
+    job:
+      name: job1
+      enabled: false
+    jdbc:
+      initialize-schema: never
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://localhost:5432/prospringdb
+    username: guest
+    password: welcome1
+  sql:
+    init:
+      mode: never
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+    database: postgresql
+    open-in-view: false
+
+logging:
+  level:
+    org.springframework: INFO
+    org.springframework.batch: INFO
+    org.springframework.jdbc: INFO
+    com.batch.masterclass.joshtube: INFO

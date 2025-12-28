@@ -1,0 +1,124 @@
+# .dockerignore
+
+# ============================================
+# Git & Version Control
+# ============================================
+.git
+.gitignore
+.gitattributes
+.github
+
+# ============================================
+# IDE & Editor Files
+# ============================================
+.idea
+.vscode
+.settings
+.project
+.classpath
+*.iml
+*.ipr
+*.iws
+.DS_Store
+*.swp
+*.swo
+*~
+
+# ============================================
+# Build Output (Maven)
+# ============================================
+target/
+*/target/
+**/target/
+
+# ============================================
+# Maven Files (Keep pom.xml!)
+# ============================================
+.mvn/wrapper/maven-wrapper.jar
+mvnw
+mvnw.cmd
+
+# ============================================
+# Docker & Kubernetes
+# ============================================
+Dockerfile*
+.dockerignore
+docker-compose*.yml
+*.yaml
+*.yml
+k8s/
+kubernetes/
+
+# ============================================
+# Terraform & IaC
+# ============================================
+terraform/
+*.tf
+*.tfstate
+*.tfstate.backup
+.terraform/
+*.tfvars
+
+# ============================================
+# CI/CD
+# ============================================
+.gitlab-ci.yml
+.travis.yml
+Jenkinsfile
+.circleci/
+.github/
+
+# ============================================
+# Documentation
+# ============================================
+README.md
+README.txt
+CHANGELOG.md
+LICENSE
+*.md
+docs/
+
+# ============================================
+# Test Files
+# ============================================
+**/*test*/
+**/*Test*/
+**/test/
+src/test/
+
+# ============================================
+# Logs & Temporary Files
+# ============================================
+*.log
+logs/
+*.tmp
+*.temp
+*.pid
+*.seed
+*.cache
+
+# ============================================
+# Node (if you have frontend)
+# ============================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# ============================================
+# Scripts (not needed in image)
+# ============================================
+*.sh
+scripts/
+build-*.sh
+
+# ============================================
+# Other
+# ============================================
+.env
+.env.*
+*.bak
+*.old
+*.orig
