@@ -10,23 +10,6 @@
 
   <groupId>com.batch.masterclass.joshtube</groupId>
   <artifactId>josh-tube-batch</artifactId>
-  <version>1.0</version>
-
-
-
-  <dependencies>
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-batch-jdbc</artifactId>
-    </dependency>
-
-    <dependency>
-      <groupId>org.postgresql</groupId>
-      <artifactId>postgresql</artifactId>
-      <scope>runtime</scope>
-    </dependency>
-  </dependencies>
-
-
+  <name>Spring Batch :: Masterclass :: Josh Long Youtube Batch</name>
 
 </project>

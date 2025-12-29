@@ -5,7 +5,8 @@ spring:
       name: job1
       enabled: false
     jdbc:
-      initialize-schema: never
+      initialize-schema: always
+
   datasource:
     driver-class-name: org.postgresql.Driver
     url: jdbc:postgresql://localhost:5432/prospringdb
@@ -14,12 +15,12 @@ spring:
   sql:
     init:
       mode: never
-  jpa:
-    hibernate:
-      ddl-auto: none
-    show-sql: false
-    database: postgresql
-    open-in-view: false
+  #jpa:
+  #  hibernate:
+  #    ddl-auto: none
+  #  show-sql: false
+  #  database: postgresql
+  #  open-in-view: false
 
 logging:
   level:
