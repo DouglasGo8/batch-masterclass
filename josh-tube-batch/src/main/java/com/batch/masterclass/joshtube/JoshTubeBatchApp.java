@@ -30,7 +30,9 @@ import org.springframework.transaction.PlatformTransactionManager;
 
 import javax.sql.DataSource;
 import java.sql.PreparedStatement;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 
 @Slf4j
@@ -40,7 +42,6 @@ public class JoshTubeBatchApp {
   public static void main(String[] args) {
     SpringApplication.run(JoshTubeBatchApp.class, args);
   }
-
 
   @Bean
   public CommandLineRunner runJob(JobOperator jobOperator, Job job) {
@@ -80,7 +81,7 @@ public class JoshTubeBatchApp {
 
 
   @Bean
-  FlatFileItemReader<VideGameSale> csvRowToItemReader(@Value("classpath:/data/vgsales.csv") Resource resource) {
+  FlatFileItemReader<VideGameSale> reader(@Value("classpath:/data/vgsales.csv") Resource resource) {
     //
     return new FlatFileItemReaderBuilder<VideGameSale>().name("vgsalesItemReader")
             .resource(resource)
@@ -110,27 +111,35 @@ public class JoshTubeBatchApp {
   }
 
   @Bean
-  JdbcBatchItemWriter<VideGameSale> videoGameSaleItemWriter(DataSource dataSource) {
+  JdbcBatchItemWriter<VideGameSale> writer(DataSource dataSource) {
     var sql = """
             INSERT INTO video_game_sales 
             VALUES( :rank, :name, :platform, :year, :genre, :publisher, 
-                    :na_sales, :eu_sales, :jp_sales, :other_sales
+                    :na_sales, :eu_sales, :jp_sales, :other_sales, :global_sales
                   );
             """;
+
     return new JdbcBatchItemWriterBuilder<VideGameSale>()
             .sql(sql)
             // --
-            .itemSqlParameterSourceProvider((VideGameSale item) -> new MapSqlParameterSource(Map.of(
-                    "rank", item.rank(),
-                    "name", item.name(),
-                    "platform", item.platform(),
-                    "year", item.year(),
-                    "genre", item.genre(),
-                    "publisher", item.publisher(),
-                    "na_sales", item.na_sales(),
-                    "eu_sales", item.eu_sales(),
-                    "jp_sales", item.jp_sales(),
-                    "other_sales", item.other_sales())))
+            .itemSqlParameterSourceProvider((VideGameSale item) -> {
+              var map = new HashMap<String, Object>();
+              //
+              map.putAll(Map.of("rank", item.rank(),
+                      "name", item.name(),
+                      "platform", item.platform(),
+                      "year", item.year(),
+                      "genre", item.genre()));
+              //
+              map.putAll(Map.of("publisher", item.publisher(),
+                      "na_sales", item.na_sales(),
+                      "eu_sales", item.eu_sales(),
+                      "jp_sales", item.jp_sales(),
+                      "other_sales", item.other_sales(),
+                      "global_sales", item.global_sales()));
+              //
+              return new MapSqlParameterSource(map);
+            })
             // ---
             /*.itemPreparedStatementSetter((VideGameSale item, PreparedStatement ps) -> {
               ps.setInt(0, item.rank());
@@ -151,13 +160,13 @@ public class JoshTubeBatchApp {
 
   @Bean
   Step csvToJob(JobRepository jobRepository, PlatformTransactionManager tx,
-                FlatFileItemReader<VideGameSale> csvRowToItemReader,
-                JdbcBatchItemWriter<VideGameSale> videGameSaleJdbcBatchItemWriter) {
+                FlatFileItemReader<VideGameSale> reader,
+                JdbcBatchItemWriter<VideGameSale> writer) {
     //
     return new StepBuilder(jobRepository)
             .<VideGameSale, VideGameSale>chunk(100).transactionManager(tx)
-            .reader(csvRowToItemReader)
-            .writer(videGameSaleJdbcBatchItemWriter)
+            .reader(reader)
+            .writer(writer)
             .build();
   }
 
