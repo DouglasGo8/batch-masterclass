@@ -2,14 +2,18 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
   <modelVersion>4.0.0</modelVersion>
+
   <parent>
-    <artifactId>batch-masterclass</artifactId>
-    <groupId>com.batch.masterclass</groupId>
+    <groupId>com.batch.masterclass.tubebatch</groupId>
+    <artifactId>tubebatch</artifactId>
     <version>1.0</version>
   </parent>
 
-  <groupId>com.batch.masterclass.joshtube</groupId>
-  <artifactId>josh-tube-batch</artifactId>
-  <name>Spring Batch :: Masterclass :: Josh Long Youtube Batch</name>
+  <groupId>com.batch.masterclass.tubebatch.worker</groupId>
+  <artifactId>worker</artifactId>
+  <version>1.0</version>
+
+  <name>Spring Batch :: Masterclass :: Tube Batch :: Worker</name>
+
 
 </project>

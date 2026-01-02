@@ -1,10 +1,10 @@
-package com.batch.masterclass.joshtube;
+package com.batch.masterclass.tubebatch.leader;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest
-class JoshTubeBatchAppTests {
+class TubeBatchAppTests {
 
 	@Test
 	void contextLoads() {

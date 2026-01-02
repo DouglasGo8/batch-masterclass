@@ -43,7 +43,7 @@ mvnw.cmd
 # ============================================
 Dockerfile*
 .dockerignore
-docker-compose*.yml
+tubebatch/docker-compose.yml
 *.yaml
 *.yml
 k8s/

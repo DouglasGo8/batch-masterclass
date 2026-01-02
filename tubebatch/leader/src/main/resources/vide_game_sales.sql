@@ -16,7 +16,9 @@ create table video_game_sales
     --unique (name)
 );
 
-create table year_platform
+select * from video_game_sales;
+
+create table year_platform_report
 (
     year     int,
     platform text,
@@ -24,7 +26,7 @@ create table year_platform
     unique (year, platform)
 );
 
-insert into year_platform
+insert into year_platform_report
 select distinct year, platform, sum(global_sales)
 from video_game_sales
 group by year, platform;
