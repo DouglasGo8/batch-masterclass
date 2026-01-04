@@ -22,9 +22,14 @@ spring:
   #  database: postgresql
   #  open-in-view: false
 
+  rabbitmq:
+    host: localhost
+    username: guest
+    password: welcome1
+
 logging:
   level:
     org.springframework: INFO
     org.springframework.batch: INFO
     org.springframework.jdbc: INFO
-    com.batch.masterclass.joshtube: INFO
+    com.batch.masterclass.tubebatch: INFO

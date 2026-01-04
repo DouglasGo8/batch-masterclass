@@ -3,6 +3,9 @@ package com.batch.masterclass.tubebatch.leader;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.amqp.core.*;
+import org.springframework.amqp.core.Queue;
+import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.batch.core.ExitStatus;
 import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.job.Job;
@@ -15,28 +18,38 @@ import org.springframework.batch.core.step.Step;
 import org.springframework.batch.core.step.StepExecution;
 import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.core.step.tasklet.Tasklet;
+import org.springframework.batch.infrastructure.item.ItemReader;
 import org.springframework.batch.infrastructure.item.database.JdbcBatchItemWriter;
 import org.springframework.batch.infrastructure.item.database.builder.JdbcBatchItemWriterBuilder;
+import org.springframework.batch.infrastructure.item.database.builder.JdbcCursorItemReaderBuilder;
 import org.springframework.batch.infrastructure.item.file.FlatFileItemReader;
 import org.springframework.batch.infrastructure.item.file.builder.FlatFileItemReaderBuilder;
 import org.springframework.batch.infrastructure.repeat.RepeatStatus;
+import org.springframework.batch.integration.chunk.ChunkMessageChannelItemWriter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.batch.autoconfigure.JobExecutionEvent;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.event.EventListener;
 import org.springframework.core.io.Resource;
+import org.springframework.integration.amqp.dsl.Amqp;
+import org.springframework.integration.channel.DirectChannel;
+import org.springframework.integration.channel.QueueChannel;
+import org.springframework.integration.core.MessagingTemplate;
+import org.springframework.integration.dsl.IntegrationFlow;
+import org.springframework.integration.dsl.MessageChannels;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.ObjectMapper;
 
 import javax.sql.DataSource;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
-
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @SpringBootApplication
@@ -75,15 +88,18 @@ public class TubeBatchApp {
   Job job(JobRepository jobRepository, Step taskletStep,
           CsvToDbStepConfiguration csvToDbStep,
           YearPlatformReportStepConfiguration yearPlatformReportStep,
-          ErrorStepConfiguration errorStep) {
+          YearReportStepConfiguration yearReportStep,
+          ErrorStepConfiguration errorStep,
+          EndStepConfiguration endStep) {
     //
     return new JobBuilder("job", jobRepository)
             .start(taskletStep).on(EMPTY_CSV_STATUS)
               .to(errorStep.errorStep())
             .from(taskletStep).on("*")
               .to(csvToDbStep.csvToStep())
-            .next(yearPlatformReportStep.yearPlatformReportStep())
-              .build()
+              .next(yearPlatformReportStep.yearPlatformReportStep())
+              .next(yearReportStep.yearReportStep())
+              .next(endStep.endStep()).build()
             .build();
   }
 
@@ -93,8 +109,20 @@ public class TubeBatchApp {
             .tasklet(tasklet, tx).build();
   }
 
+  // ----------------------------- Records -------------------------------------
 
-  // ----------------------------- Configurations ---------------------------------
+  record VideGameSale(int rank, String name, String platform, int year,
+                      String genre, String publisher, float na_sales, float eu_sales,
+                      float jp_sales, float other_sales, float global_sales) {
+  }
+
+  record YearReport(int year, Collection<YearPlatformSales> breakout) {
+  }
+
+  record YearPlatformSales(int year, String platform, float sales) {
+  }
+
+  // ----------------------------- Configurations -----------------------------------------------
 
   @Configuration
   class CsvToDbStepConfiguration {
@@ -226,6 +254,132 @@ public class TubeBatchApp {
 
   @Configuration
   @AllArgsConstructor
+  class EndStepConfiguration {
+    final JobRepository jobRepository;
+    final PlatformTransactionManager tx;
+
+    @Bean
+    Step endStep() {
+      return new StepBuilder("end", jobRepository)
+              .tasklet(((contribution, chunkContext) -> {
+                log.info("Job Finished!!!");
+                return RepeatStatus.FINISHED;
+              }), tx).build();
+    }
+  }
+
+  @Configuration
+  @AllArgsConstructor
+  class YearReportStepConfiguration {
+    final DataSource dataSource;
+    final ObjectMapper objectMapper;
+    final JobRepository jobRepository;
+    final PlatformTransactionManager tx;
+
+    final Map<Integer, YearReport> reportMap = new ConcurrentHashMap<>();
+
+    @EventListener
+    void batchJobCompleted(JobExecutionEvent event) {
+      var running = Map.of(//
+              "running", event.getJobExecution().getStatus().isRunning(),//
+              "finished", event.getJobExecution().getExitStatus().getExitCode() //
+      );//
+      log.info("jobExecutionEvent: [{}]", running);
+      this.reportMap.clear();
+    }
+
+    @Bean
+    Step yearReportStep() {
+      return new StepBuilder("yearReportStep", this.jobRepository)
+              .<YearReport, String>chunk(1000).transactionManager(tx)
+              .reader(this.yearPlatformSalesItemReader())
+              .processor(this.objectMapper::writeValueAsString)
+              .writer(this.yearPlatformSalesItemWriter())
+              .build();
+    }
+
+    // 1. Integration Flow to SEND chunks to the worker
+    @Bean
+    IntegrationFlow outboundFlow(AmqpTemplate amqpTemplate) {
+      return IntegrationFlow
+              .from(requests())
+              .handle(Amqp.outboundAdapter(amqpTemplate)
+                      .exchangeName("remote-chunking-exchange")
+                      .routingKey("requests"))
+              .get();
+    }
+
+    // 2. Integration Flow to RECEIVE responses from the worker
+    @Bean
+    IntegrationFlow replyFlow(ConnectionFactory connectionFactory) {
+      return IntegrationFlow
+              .from(Amqp.inboundAdapter(connectionFactory, "replies"))
+              .channel(replies())
+              .get();
+    }
+
+    @Bean
+    DirectChannel requests() {
+      return MessageChannels.direct().getObject();
+    }
+
+    @Bean
+    QueueChannel replies() {
+      return MessageChannels.queue().getObject();
+    }
+
+
+    @Bean
+    MessagingTemplate messagingTemplate() {
+      var template = new MessagingTemplate();
+      template.setDefaultChannel(requests());
+      template.setReceiveTimeout(2000);
+      return template;
+    }
+
+    @Bean
+    ItemReader<YearReport> yearPlatformSalesItemReader() {
+      var sql = """
+              select year, platform, sales,
+                count(*) over (partition by year) as platforms_per_year
+              from year_platform_report
+              where year != 0
+              order by year;
+              """;
+      //
+      return new JdbcCursorItemReaderBuilder<YearReport>()
+              .sql(sql)
+              .name("yearPlatformSalesItemReader")
+              .dataSource(this.dataSource)
+              .rowMapper(((rs, rowNum) -> {
+                var year = rs.getInt("year");
+                //
+                if (!this.reportMap.containsKey(year))
+                  this.reportMap.put(year, new YearReport(year, new ArrayList<>()));
+                var yr = this.reportMap.get(year);
+                //
+                yr.breakout().add(new YearPlatformSales(rs.getInt("year"),
+                        rs.getString("platform"),
+                        rs.getFloat("sales")));
+                //
+                return yr;
+              }))
+              .build();
+    }
+
+    @Bean
+    @StepScope
+    ChunkMessageChannelItemWriter<String> yearPlatformSalesItemWriter() {
+      var writer = new ChunkMessageChannelItemWriter<String>();
+      writer.setMessagingOperations(messagingTemplate());
+      writer.setReplyChannel(replies());
+      return writer;
+    }
+
+  }
+
+  @Configuration
+  @AllArgsConstructor
   class YearPlatformReportStepConfiguration {
     final JdbcTemplate jdbc;
     final TransactionTemplate txt;
@@ -260,6 +414,37 @@ public class TubeBatchApp {
                         return RepeatStatus.FINISHED;
                       }), txm)//
               .build();
+    }
+
+  }
+
+
+  @Configuration
+  class RabbitConfiguration {
+
+    @Bean
+    org.springframework.amqp.core.Queue requestQueue() {
+      return new org.springframework.amqp.core.Queue("requests", false);
+    }
+
+    @Bean
+    org.springframework.amqp.core.Queue repliesQueue() {
+      return new Queue("replies", false);
+    }
+
+    @Bean
+    TopicExchange exchange() {
+      return new TopicExchange("remote-chunking-exchange");
+    }
+
+    @Bean
+    Binding repliesBinding(TopicExchange exchange) {
+      return BindingBuilder.bind(repliesQueue()).to(exchange).with("replies");
+    }
+
+    @Bean
+    Binding requestBinding(TopicExchange exchange) {
+      return BindingBuilder.bind(requestQueue()).to(exchange).with("requests");
     }
 
   }
