@@ -1,7 +1,7 @@
 #
 spring:
-  amqp:
-    deserialization.trust.all: true
+
+
   batch:
     job:
       name: job1

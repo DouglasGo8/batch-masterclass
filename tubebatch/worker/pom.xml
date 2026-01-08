@@ -11,7 +11,7 @@
 
   <groupId>com.batch.masterclass.tubebatch.worker</groupId>
   <artifactId>worker</artifactId>
-  <version>1.0</version>
+
 
   <name>Spring Batch :: Masterclass :: Tube Batch :: Worker</name>
 

@@ -1,5 +1,7 @@
 package com.batch.masterclass.tubebatch.leader;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PostConstruct;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -45,7 +47,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import tools.jackson.databind.ObjectMapper;
 
 import javax.sql.DataSource;
 import java.util.*;
@@ -53,12 +54,12 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @SpringBootApplication
-public class TubeBatchApp {
+public class LeaderBatchApp {
 
   protected static final String EMPTY_CSV_STATUS = "EMPTY";
 
   public static void main(String[] args) {
-    SpringApplication.run(TubeBatchApp.class, args);
+    SpringApplication.run(LeaderBatchApp.class, args);
   }
 
   @Bean
@@ -94,12 +95,12 @@ public class TubeBatchApp {
     //
     return new JobBuilder("job", jobRepository)
             .start(taskletStep).on(EMPTY_CSV_STATUS)
-              .to(errorStep.errorStep())
+            .to(errorStep.errorStep())
             .from(taskletStep).on("*")
-              .to(csvToDbStep.csvToStep())
-              .next(yearPlatformReportStep.yearPlatformReportStep())
-              .next(yearReportStep.yearReportStep())
-              .next(endStep.endStep()).build()
+            .to(csvToDbStep.csvToStep())
+            .next(yearPlatformReportStep.yearPlatformReportStep())
+            .next(yearReportStep.yearReportStep())
+            .next(endStep.endStep()).build()
             .build();
   }
 
@@ -226,7 +227,7 @@ public class TubeBatchApp {
                 public ExitStatus afterStep(StepExecution stepExecution) {
                   var count = Objects.requireNonNull(
                           jdbc.queryForObject("select coalesce(count(*) ,0) from video_game_sales", Integer.class));
-                  var status = count == 0 ? new ExitStatus(TubeBatchApp.EMPTY_CSV_STATUS) : ExitStatus.COMPLETED;
+                  var status = count == 0 ? new ExitStatus(LeaderBatchApp.EMPTY_CSV_STATUS) : ExitStatus.COMPLETED;
                   System.out.println("the status is " + status);
                   return status;
                 }
@@ -268,6 +269,16 @@ public class TubeBatchApp {
     }
   }
 
+  @Bean
+  ObjectMapper objectMapper() {
+    return new ObjectMapper();
+  }
+
+  @PostConstruct
+  public void init() {
+    System.setProperty("spring.amqp.deserialization.trust.all", "true");
+  }
+
   @Configuration
   @AllArgsConstructor
   class YearReportStepConfiguration {
@@ -298,6 +309,22 @@ public class TubeBatchApp {
               .build();
     }
 
+    // For production
+    /*
+    @Bean
+public SimpleMessageConverter converter() {
+  var converter = new SimpleMessageConverter();
+  converter.setAllowedListPatterns(List.of(
+    "org.springframework.batch.integration.chunk.*",
+    "org.springframework.batch.core.*",
+    "com.batch.masterclass.tubebatch.*",
+    "java.util.*",
+    "java.lang.*"
+  ));
+  return converter;
+}
+     */
+
     // 1. Integration Flow to SEND chunks to the worker
     @Bean
     IntegrationFlow outboundFlow(AmqpTemplate amqpTemplate) {
@@ -314,6 +341,7 @@ public class TubeBatchApp {
     IntegrationFlow replyFlow(ConnectionFactory connectionFactory) {
       return IntegrationFlow
               .from(Amqp.inboundAdapter(connectionFactory, "replies"))
+              //.messageConverter(converter()))
               .channel(replies())
               .get();
     }
@@ -418,9 +446,8 @@ public class TubeBatchApp {
 
   }
 
-
   @Configuration
-  class RabbitConfiguration {
+  class LeaderConfiguration {
 
     @Bean
     org.springframework.amqp.core.Queue requestQueue() {

@@ -42,6 +42,21 @@ CREATE INDEX idx_mv_year ON mv_sales_by_year (year, platform);
 --
 ANALYZE mv_sales_by_year;
 
--- select * from video_game_sales
--- truncate table video_game_sales
--- Rank,Name,Platform,Year,Genre,Publisher,NA_Sales,EU_Sales,JP_Sales,Other_Sales,Global_Sales
+--------------- pg4Admin
+
+select * from video_game_sales;
+
+select * from  year_platform_report;
+
+select year,
+       platform,
+       sales,
+       count(*) over (partition by year) as platforms_per_year
+from year_platform_report
+where year != 0
+order by year;
+
+/**
+truncate table video_game_sales;
+truncate table year_platform_report;
+**/
